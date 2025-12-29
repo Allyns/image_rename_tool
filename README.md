@@ -2,6 +2,14 @@
 
 一个基于 Wails 框架开发的跨平台桌面应用，提供图片批量重命名和命名格式转换功能。
 
+## 功能截图
+
+### 图片重命名界面
+![图片重命名界面](https://github.com/Allyns/image_rename_tool/blob/main/images/img_v3_02te_1ad25494-be54-43a5-b099-d7c61a90261g.jpg)
+
+### 命名转换器界面
+![命名转换器界面](https://github.com/Allyns/image_rename_tool/blob/main/images/img_v3_02te_7a0b18f5-5b1e-4bbe-be0e-f9549dfab07g.jpg)
+
 ## 功能特性
 
 ### 1. 图片批量重命名
