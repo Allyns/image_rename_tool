@@ -32,8 +32,22 @@ async function init() {
     await loadOutputDir();
     initTabs();
     initConverter();
-    initDragDrop();
     initSyncModule();
+    initProgressListener();
+}
+
+// 初始化进度监听
+function initProgressListener() {
+    // 监听处理进度事件
+    if (window.runtime && window.runtime.EventsOn) {
+        console.log('[initProgressListener] 注册进度监听');
+        window.runtime.EventsOn('rename:progress', (data) => {
+            console.log('[progress]', data);
+            updateProgress(data.current, data.total, data.filename);
+        });
+    } else {
+        console.warn('[initProgressListener] runtime.EventsOn 不可用');
+    }
 }
 
 // 初始化同步模块开关
@@ -320,6 +334,37 @@ document.getElementById('clearOutput').addEventListener('click', async () => {
     }
 });
 
+// 显示 Loading
+function showLoading(total) {
+    const overlay = document.getElementById('loadingOverlay');
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const loadingDetail = document.getElementById('loadingDetail');
+    
+    progressText.textContent = `0 / ${total}`;
+    progressBar.style.width = '0%';
+    loadingDetail.textContent = '';
+    overlay.classList.add('show');
+}
+
+// 隐藏 Loading
+function hideLoading() {
+    const overlay = document.getElementById('loadingOverlay');
+    overlay.classList.remove('show');
+}
+
+// 更新进度
+function updateProgress(current, total, filename) {
+    const progressText = document.getElementById('progressText');
+    const progressBar = document.getElementById('progressBar');
+    const loadingDetail = document.getElementById('loadingDetail');
+    
+    const percentage = Math.round((current / total) * 100);
+    progressText.textContent = `${current} / ${total}`;
+    progressBar.style.width = `${percentage}%`;
+    loadingDetail.textContent = `正在处理: ${filename}`;
+}
+
 // 执行重命名
 document.getElementById('rename').addEventListener('click', async () => {
     console.log('[rename] 点击运行按钮');
@@ -340,19 +385,38 @@ document.getElementById('rename').addEventListener('click', async () => {
         return;
     }
     
-    // 更新所有项的新文件名
-    console.log('[rename] 开始更新文件名');
-    for (let i = 0; i < unprocessedImages.length; i++) {
-        const item = unprocessedImages[i];
-        const ext = item.origName.substring(item.origName.lastIndexOf('.'));
-        item.newName = await window.go.main.App.UpdateItem(item.prefix, item.module, item.featureName, ext);
-        console.log('[rename]', item.origName, '->', item.newName);
+    // 在执行前同步输出目录到后端
+    if (outputDir) {
+        console.log('[rename] 同步输出目录到后端:', outputDir);
+        try {
+            await window.go.main.App.SetOutputDir(outputDir);
+        } catch (e) {
+            console.error('[rename] 设置输出目录失败:', e);
+        }
     }
     
-    console.log('[rename] 开始执行重命名');
-    console.log('[rename] 待处理列表:', unprocessedImages);
+    // 显示 loading
+    showLoading(unprocessedImages.length);
     
     try {
+        // 更新所有项的新文件名
+        console.log('[rename] 开始更新文件名');
+        for (let i = 0; i < unprocessedImages.length; i++) {
+            const item = unprocessedImages[i];
+            const ext = item.origName.substring(item.origName.lastIndexOf('.'));
+            item.newName = await window.go.main.App.UpdateItem(item.prefix, item.module, item.featureName, ext);
+            console.log('[rename]', item.origName, '->', item.newName);
+        }
+        
+        console.log('[rename] 开始执行重命名');
+        console.log('[rename] 输出目录:', outputDir);
+        console.log('[rename] 待处理列表:', JSON.stringify(unprocessedImages.map(i => ({
+            origName: i.origName,
+            origPath: i.origPath,
+            newName: i.newName,
+            hasFile: !!i.file
+        }))));
+        
         const result = await window.go.main.App.ExecuteRename(unprocessedImages);
         console.log('[rename] 执行结果:', result);
         
@@ -362,9 +426,18 @@ document.getElementById('rename').addEventListener('click', async () => {
         });
         
         renderTable();
+        
+        // 隐藏 loading
+        hideLoading();
+        
         alert(result);
     } catch (e) {
         console.error('[rename] 执行失败:', e);
+        console.error('[rename] 错误堆栈:', e.stack);
+        
+        // 隐藏 loading
+        hideLoading();
+        
         alert('错误: ' + e);
     }
 });
@@ -553,35 +626,28 @@ async function loadImages() {
         const imgEl = document.getElementById(`img_${i}`);
         if (!imgEl) continue;
         
+        // 如果已有缓存，直接使用
+        if (item.base64) {
+            imgEl.src = item.base64;
+            continue;
+        }
+        
+        // 已处理的项显示占位图
+        if (item.processed) {
+            imgEl.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Crect fill=%22%23f6ffed%22 width=%2250%22 height=%2250%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%2352c41a%22 font-size=%2216%22%3E✓%3C/text%3E%3C/svg%3E';
+            continue;
+        }
+        
         try {
-            let base64;
-            
-            // 如果有 File 对象（拖拽导入），直接读取
-            if (item.file) {
-                base64 = await readFileAsBase64(item.file);
-            } else {
-                // 否则通过后端读取
-                base64 = await window.go.main.App.GetImageBase64(item.origPath);
-            }
-            
+            const base64 = await window.go.main.App.GetImageBase64(item.origPath);
             imgEl.src = base64;
             // 缓存 base64 数据用于预览
             item.base64 = base64;
         } catch (e) {
-            console.error('Failed to load image:', e);
+            console.error('Failed to load image:', item.origName, e);
             imgEl.src = 'data:image/svg+xml,%3Csvg xmlns=%22http://www.w3.org/2000/svg%22 width=%2250%22 height=%2250%22%3E%3Crect fill=%22%23ffebee%22 width=%2250%22 height=%2250%22/%3E%3Ctext x=%2250%25%22 y=%2250%25%22 dominant-baseline=%22middle%22 text-anchor=%22middle%22 fill=%22%23f44336%22 font-size=%2210%22%3E失败%3C/text%3E%3C/svg%3E';
         }
     }
-}
-
-// 读取 File 对象为 base64
-function readFileAsBase64(file) {
-    return new Promise((resolve, reject) => {
-        const reader = new FileReader();
-        reader.onload = () => resolve(reader.result);
-        reader.onerror = reject;
-        reader.readAsDataURL(file);
-    });
 }
 
 // 显示图片预览
@@ -602,110 +668,6 @@ function deleteItem(index) {
         images.splice(index, 1);
         renderTable();
     }
-}
-
-// 初始化拖拽功能
-function initDragDrop() {
-    const container = document.querySelector('#renamePage .table-container');
-    
-    // 阻止默认行为
-    ['dragenter', 'dragover', 'dragleave', 'drop'].forEach(eventName => {
-        container.addEventListener(eventName, preventDefaults, false);
-        document.body.addEventListener(eventName, preventDefaults, false);
-    });
-    
-    // 高亮效果
-    ['dragenter', 'dragover'].forEach(eventName => {
-        container.addEventListener(eventName, () => {
-            container.classList.add('drag-over');
-        }, false);
-    });
-    
-    ['dragleave', 'drop'].forEach(eventName => {
-        container.addEventListener(eventName, () => {
-            container.classList.remove('drag-over');
-        }, false);
-    });
-    
-    // 处理拖拽文件
-    container.addEventListener('drop', handleDrop, false);
-}
-
-function preventDefaults(e) {
-    e.preventDefault();
-    e.stopPropagation();
-}
-
-async function handleDrop(e) {
-    console.log('[handleDrop] 开始处理拖拽文件');
-    const dt = e.dataTransfer;
-    const files = [...dt.files];
-    console.log('[handleDrop] 拖拽文件数:', files.length);
-    
-    // 筛选图片文件
-    const validExts = ['.png', '.jpg', '.jpeg', '.webp', '.gif'];
-    const imageFiles = files.filter(file => {
-        const ext = '.' + file.name.split('.').pop().toLowerCase();
-        return validExts.includes(ext);
-    });
-    
-    console.log('[handleDrop] 有效图片数:', imageFiles.length);
-    
-    if (imageFiles.length === 0) {
-        alert('未检测到图片文件');
-        return;
-    }
-    
-    // 添加图片
-    const startId = images.length;
-    const defaultModule = modules.length > 0 ? modules[0] : '通用';
-    const defaultType = types.length > 0 ? types[0] : 'icon';
-    
-    for (let i = 0; i < imageFiles.length; i++) {
-        const file = imageFiles[i];
-        const ext = '.' + file.name.split('.').pop();
-        
-        console.log('[handleDrop] 处理文件:', file.name);
-        
-        // 尝试获取文件路径
-        let filePath = file.path || '';
-        console.log('[handleDrop] file.path:', filePath || '(空)');
-        
-        // 如果没有 path 属性（浏览器环境），读取文件并保存到临时目录
-        if (!filePath) {
-            try {
-                console.log('[handleDrop] 读取文件内容并保存到临时目录');
-                // 读取文件为 base64
-                const base64 = await readFileAsBase64(file);
-                console.log('[handleDrop] base64 长度:', base64.length);
-                // 保存到临时目录
-                filePath = await window.go.main.App.SaveDroppedFile(file.name, base64);
-                console.log('[handleDrop] 保存后的路径:', filePath);
-            } catch (e) {
-                console.error('[handleDrop] 保存文件失败:', file.name, e);
-                alert(`保存文件失败: ${file.name}`);
-                continue;
-            }
-        }
-        
-        const item = {
-            id: startId + i,
-            origPath: filePath,
-            origName: file.name,
-            prefix: defaultType,
-            module: defaultModule,
-            featureName: extractChinese(file.name),
-            newName: '',
-            processed: false,
-            file: file // 保存 File 对象用于读取
-        };
-        
-        console.log('[handleDrop] 添加项:', item);
-        images.push(item);
-    }
-    
-    console.log('[handleDrop] 拖拽处理完成，总图片数:', images.length);
-    renderTable();
 }
 
 function escapeHtml(text) {

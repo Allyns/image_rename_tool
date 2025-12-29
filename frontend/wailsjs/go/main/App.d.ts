@@ -14,8 +14,6 @@ export function GetOutputDir():Promise<string>;
 
 export function GetTypes():Promise<Array<string>>;
 
-export function SaveDroppedFile(arg1:string,arg2:string):Promise<string>;
-
 export function SelectFiles():Promise<Array<main.ImageItem>>;
 
 export function SelectFolder():Promise<Array<main.ImageItem>>;

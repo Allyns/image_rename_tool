@@ -26,10 +26,6 @@ export function GetTypes() {
   return window['go']['main']['App']['GetTypes']();
 }
 
-export function SaveDroppedFile(arg1, arg2) {
-  return window['go']['main']['App']['SaveDroppedFile'](arg1, arg2);
-}
-
 export function SelectFiles() {
   return window['go']['main']['App']['SelectFiles']();
 }

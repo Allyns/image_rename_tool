@@ -455,55 +455,11 @@ func toKebabCase(words []string) string {
 	return strings.Join(words, "-")
 }
 
-// SaveDroppedFile 保存拖拽的文件到临时目录并返回路径
-func (a *App) SaveDroppedFile(filename string, base64Data string) (string, error) {
-	log.Printf("[SaveDroppedFile] 开始保存拖拽文件: %s", filename)
-	
-	// 解析 base64 数据（去掉 data:image/xxx;base64, 前缀）
-	parts := strings.SplitN(base64Data, ",", 2)
-	if len(parts) != 2 {
-		log.Printf("[SaveDroppedFile] 错误: base64 数据格式无效")
-		return "", fmt.Errorf("invalid base64 data")
-	}
-
-	// 解码 base64
-	data, err := base64.StdEncoding.DecodeString(parts[1])
-	if err != nil {
-		log.Printf("[SaveDroppedFile] 错误: base64 解码失败: %v", err)
-		return "", err
-	}
-	log.Printf("[SaveDroppedFile] base64 解码成功，文件大小: %d bytes", len(data))
-
-	// 创建临时目录
-	tmpDir := filepath.Join(os.TempDir(), "image_rename_tool")
-	if err := os.MkdirAll(tmpDir, 0755); err != nil {
-		log.Printf("[SaveDroppedFile] 错误: 创建临时目录失败: %v", err)
-		return "", err
-	}
-	log.Printf("[SaveDroppedFile] 临时目录: %s", tmpDir)
-
-	// 保存文件，处理重名（使用时间戳确保唯一性）
-	ext := filepath.Ext(filename)
-	nameWithoutExt := strings.TrimSuffix(filename, ext)
-	tmpPath := filepath.Join(tmpDir, fmt.Sprintf("%s_%d%s", nameWithoutExt, os.Getpid(), ext))
-	
-	// 如果仍然存在，添加计数器
-	counter := 1
-	for {
-		if _, err := os.Stat(tmpPath); os.IsNotExist(err) {
-			break
-		}
-		tmpPath = filepath.Join(tmpDir, fmt.Sprintf("%s_%d_%d%s", nameWithoutExt, os.Getpid(), counter, ext))
-		counter++
-	}
-
-	if err := os.WriteFile(tmpPath, data, 0644); err != nil {
-		log.Printf("[SaveDroppedFile] 错误: 写入文件失败: %v", err)
-		return "", err
-	}
-
-	log.Printf("[SaveDroppedFile] 成功保存文件: %s", tmpPath)
-	return tmpPath, nil
+// ProgressData 进度数据
+type ProgressData struct {
+	Current  int    `json:"current"`
+	Total    int    `json:"total"`
+	Filename string `json:"filename"`
 }
 
 // ExecuteRename 执行重命名
@@ -516,37 +472,14 @@ func (a *App) ExecuteRename(items []ImageItem) (string, error) {
 
 	successCount := 0
 	var errors []string
+	totalCount := len(items)
 	
-	// 检查是否有拖拽导入的文件（临时目录文件）
-	tmpDir := filepath.Join(os.TempDir(), "image_rename_tool")
-	log.Printf("[ExecuteRename] 临时目录: %s", tmpDir)
-	
-	hasDroppedFiles := false
-	for _, item := range items {
-		if strings.HasPrefix(item.OrigPath, tmpDir) {
-			hasDroppedFiles = true
-			log.Printf("[ExecuteRename] 检测到拖拽文件: %s", item.OrigPath)
-			break
-		}
-	}
-	
-	log.Printf("[ExecuteRename] 输出目录: %s, 有拖拽文件: %v", a.outputDir, hasDroppedFiles)
-	
-	// 如果有拖拽文件且没有设置输出目录，必须提示
-	if hasDroppedFiles && a.outputDir == "" {
-		log.Printf("[ExecuteRename] 错误: 拖拽文件未设置输出目录")
-		return "", fmt.Errorf("拖拽导入的文件必须设置输出目录")
-	}
-
-	for _, item := range items {
-		log.Printf("[ExecuteRename] 处理文件: %s -> %s", item.OrigName, item.NewName)
+	for i, item := range items {
+		log.Printf("[ExecuteRename] 处理文件 %d/%d: %s -> %s", i+1, totalCount, item.OrigName, item.NewName)
 		log.Printf("[ExecuteRename]   原路径: %s", item.OrigPath)
 		
 		// 确定输出目录
 		var outputDir string
-		isDroppedFile := strings.HasPrefix(item.OrigPath, tmpDir)
-		log.Printf("[ExecuteRename]   是否拖拽文件: %v", isDroppedFile)
-		
 		if a.outputDir != "" {
 			outputDir = a.outputDir
 			log.Printf("[ExecuteRename]   使用设置的输出目录: %s", outputDir)
@@ -556,7 +489,7 @@ func (a *App) ExecuteRename(items []ImageItem) (string, error) {
 				continue
 			}
 		} else {
-			// 普通文件使用原目录
+			// 使用原目录
 			outputDir = filepath.Dir(item.OrigPath)
 			log.Printf("[ExecuteRename]   使用原文件目录: %s", outputDir)
 		}
@@ -565,7 +498,7 @@ func (a *App) ExecuteRename(items []ImageItem) (string, error) {
 		log.Printf("[ExecuteRename]   目标路径: %s", destPath)
 
 		// 跳过无需处理的文件
-		if !isDroppedFile && a.outputDir == "" && item.OrigPath == destPath {
+		if a.outputDir == "" && item.OrigPath == destPath {
 			log.Printf("[ExecuteRename]   跳过: 原路径和目标路径相同")
 			successCount++
 			continue
@@ -587,8 +520,8 @@ func (a *App) ExecuteRename(items []ImageItem) (string, error) {
 			log.Printf("[ExecuteRename]   新目标路径: %s", destPath)
 		}
 
-		// 拖拽文件总是复制，普通文件根据是否设置输出目录决定
-		if isDroppedFile || a.outputDir != "" {
+		// 根据是否设置输出目录决定操作
+		if a.outputDir != "" {
 			// 复制文件
 			log.Printf("[ExecuteRename]   操作: 复制文件")
 			if err := copyFile(item.OrigPath, destPath); err != nil {
@@ -609,6 +542,14 @@ func (a *App) ExecuteRename(items []ImageItem) (string, error) {
 				successCount++
 			}
 		}
+		
+		// 发送进度事件
+		runtime.EventsEmit(a.ctx, "rename:progress", ProgressData{
+			Current:  i + 1,
+			Total:    totalCount,
+			Filename: item.OrigName,
+		})
+		log.Printf("[ExecuteRename]   发送进度: %d/%d", i+1, totalCount)
 	}
 
 	msg := fmt.Sprintf("成功: %d, 失败: %d", successCount, len(errors))

@@ -164,25 +164,6 @@ button.btn-secondary:hover {
     box-shadow: 0 1px 3px rgba(0,0,0,0.1);
     overflow: auto;
     position: relative;
-    transition: background-color 0.3s;
-}
-
-.table-container.drag-over {
-    background: #e6f7ff;
-    border: 2px dashed #1890ff;
-}
-
-.table-container.drag-over::after {
-    content: '释放以添加图片';
-    position: absolute;
-    top: 50%;
-    left: 50%;
-    transform: translate(-50%, -50%);
-    font-size: 18px;
-    color: #1890ff;
-    font-weight: 500;
-    pointer-events: none;
-    z-index: 10;
 }
 
 table {

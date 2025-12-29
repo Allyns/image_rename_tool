@@ -45,7 +45,7 @@
                     <tbody id="tableBody">
                     </tbody>
                 </table>
-                <div id="emptyTip" class="empty-tip">暂无图片，请点击上方按钮添加<br><span style="font-size:13px;color:#999;margin-top:8px;display:inline-block;">或拖拽图片到此处</span></div>
+                <div id="emptyTip" class="empty-tip">暂无图片，请点击上方按钮添加</div>
             </div>
 
             <div class="output-bar">
@@ -155,6 +155,21 @@
             <div class="modal-buttons">
                 <button id="closeModuleModal">关闭</button>
             </div>
+        </div>
+    </div>
+
+    <!-- Loading 弹窗 -->
+    <div id="loadingOverlay" class="loading-overlay">
+        <div class="loading-content">
+            <div class="loading-spinner"></div>
+            <div class="loading-text">正在处理...</div>
+            <div class="loading-progress">
+                <span id="progressText">0 / 0</span>
+            </div>
+            <div class="progress-bar-container">
+                <div id="progressBar" class="progress-bar"></div>
+            </div>
+            <div class="loading-detail" id="loadingDetail"></div>
         </div>
     </div>
 
