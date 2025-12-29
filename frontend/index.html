@@ -1,0 +1,165 @@
+<!DOCTYPE html>
+<html lang="zh-CN">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>图片重命名工具</title>
+    <link rel="stylesheet" href="style.css">
+</head>
+<body>
+    <div class="container">
+        <!-- Tab 切换 -->
+        <div class="tabs">
+            <div class="tab active" data-tab="rename">图片重命名</div>
+            <div class="tab" data-tab="converter">命名转换器</div>
+        </div>
+
+        <!-- 图片重命名页面 -->
+        <div id="renamePage" class="page active">
+            <div class="toolbar">
+                <button id="selectFiles">选择图片</button>
+                <button id="selectFolder">选择文件夹</button>
+                <button id="manageTypes">管理类型</button>
+                <button id="manageModules">管理模块</button>
+                <button id="clearList">清空</button>
+                <button id="rename" class="primary">运行</button>
+                <label class="switch-label">
+                    <input type="checkbox" id="syncModule" class="switch-checkbox" checked>
+                    <span class="switch-text">同步模块</span>
+                </label>
+            </div>
+
+            <div class="table-container">
+                <table id="imageTable">
+                    <thead>
+                        <tr>
+                            <th style="width:80px">预览</th>
+                            <th>原文件名</th>
+                            <th style="width:100px">类型</th>
+                            <th style="width:120px">模块</th>
+                            <th>功能名称</th>
+                            <th>新文件名</th>
+                            <th style="width:80px">操作</th>
+                        </tr>
+                    </thead>
+                    <tbody id="tableBody">
+                    </tbody>
+                </table>
+                <div id="emptyTip" class="empty-tip">暂无图片，请点击上方按钮添加<br><span style="font-size:13px;color:#999;margin-top:8px;display:inline-block;">或拖拽图片到此处</span></div>
+            </div>
+
+            <div class="output-bar">
+                <label>输出目录:</label>
+                <input type="text" id="outputPath" placeholder="原目录覆盖" readonly>
+                <button id="selectOutput">选择</button>
+                <button id="clearOutput">清除</button>
+                <span id="outputTip" class="output-tip">（默认：原目录覆盖）</span>
+            </div>
+        </div>
+
+        <!-- 命名转换器页面 -->
+        <div id="converterPage" class="page">
+            <div class="converter-container">
+                <div class="converter-input-section">
+                    <label>原文</label>
+                    <input type="text" id="converterInput" placeholder="输入任意格式文本，支持中英文混合">
+                    <button id="pasteBtn" class="btn-secondary">粘贴</button>
+                </div>
+
+                <div class="converter-results">
+                    <h3>转换结果</h3>
+                    
+                    <div class="result-item">
+                        <label>驼峰命名法</label>
+                        <div class="result-box" id="resultCamel">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultCamel')">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="result-item">
+                        <label>帕斯卡命名法</label>
+                        <div class="result-box" id="resultPascal">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultPascal')">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="result-item">
+                        <label>下划线+小写字母</label>
+                        <div class="result-box" id="resultSnake">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultSnake')">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="result-item">
+                        <label>下划线+大写字母</label>
+                        <div class="result-box" id="resultScreaming">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultScreaming')">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="result-item">
+                        <label>包名</label>
+                        <div class="result-box" id="resultPackage">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultPackage')">复制</button>
+                        </div>
+                    </div>
+
+                    <div class="result-item">
+                        <label>中横线+小写字母</label>
+                        <div class="result-box" id="resultKebab">
+                            <span class="result-text"></span>
+                            <button class="copy-btn" onclick="copyResult('resultKebab')">复制</button>
+                        </div>
+                    </div>
+                </div>
+
+                <button id="clearConverter" class="btn-secondary">清空</button>
+
+                <div class="converter-tips">
+                    <span class="tip-icon">ℹ</span>
+                    提示：工具会自动识别原文中的单词、数字、字符并智能转换，点击结果即可复制到剪贴板。
+                </div>
+            </div>
+        </div>
+    </div>
+
+    <!-- 类型管理弹窗 -->
+    <div id="typeModal" class="modal">
+        <div class="modal-content">
+            <h3>管理类型</h3>
+            <div class="module-list" id="typeList"></div>
+            <div class="add-module">
+                <input type="text" id="newTypeName" placeholder="新类型名称(英文)">
+                <button id="addType">添加</button>
+            </div>
+            <div class="modal-buttons">
+                <button id="closeTypeModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <!-- 模块管理弹窗 -->
+    <div id="moduleModal" class="modal">
+        <div class="modal-content">
+            <h3>管理模块</h3>
+            <div class="module-list" id="moduleList"></div>
+            <div class="add-module">
+                <input type="text" id="newModuleName" placeholder="新模块名称">
+                <button id="addModule">添加</button>
+            </div>
+            <div class="modal-buttons">
+                <button id="closeModuleModal">关闭</button>
+            </div>
+        </div>
+    </div>
+
+    <script src="wailsjs/runtime/runtime.js"></script>
+    <script src="wailsjs/go/main/App.js"></script>
+    <script src="main.js"></script>
+</body>
+</html>
